@@ -16,8 +16,7 @@ TOTAL_WIDTH = GAME_WIDTH + CAM_WIDTH
 BULLET_SPEED = 10
 ENEMY_SPEED = 4
 MAX_LIVES = 2
-
-EXIT_HOLD_TIME = 60   # 1 second hold at 60 FPS
+EXIT_HOLD_TIME = 60  # 1 second hold
 
 # =========================
 # INIT PYGAME
@@ -38,6 +37,31 @@ fighter_img = pygame.transform.scale(fighter_img, (80, 60))
 
 enemy_img = pygame.image.load("enemy.png").convert_alpha()
 enemy_img = pygame.transform.scale(enemy_img, (70, 80))
+
+# =========================
+# TOP 5 SCORE SYSTEM
+# =========================
+def load_scores():
+    try:
+        with open("scores.txt", "r") as file:
+            scores = file.readlines()
+            return [int(score.strip()) for score in scores]
+    except:
+        return []
+
+def save_scores(scores):
+    with open("scores.txt", "w") as file:
+        for score in scores:
+            file.write(str(score) + "\n")
+
+def update_top_scores(current_score):
+    scores = load_scores()
+    scores.append(current_score)
+    scores = sorted(scores, reverse=True)[:5]
+    save_scores(scores)
+    return scores
+
+top_scores = load_scores()
 
 # =========================
 # MEDIAPIPE
@@ -108,11 +132,11 @@ while running:
             if game_state == "PLAYING":
                 player.x = int(hand_landmarks.landmark[9].x * GAME_WIDTH)
 
-    # Clamp player inside screen
+    # Clamp player
     player.x = max(0, min(player.x, GAME_WIDTH - 80))
 
     # =========================
-    # SAFE EXIT (ONLY IN MENU)
+    # SAFE EXIT (MENU ONLY)
     # =========================
     if game_state == "MENU" and fingers == 3:
         exit_timer += 1
@@ -121,7 +145,7 @@ while running:
     else:
         exit_timer = 0
 
-    # Convert camera to pygame surface
+    # Convert camera to pygame
     frame = cv2.resize(frame, (CAM_WIDTH, HEIGHT))
     frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     frame = np.rot90(frame)
@@ -142,9 +166,18 @@ while running:
         start_text = font.render("Show 2 Fingers To Start", True, (0,255,255))
         exit_text = font.render("Hold 3 Fingers To Exit", True, (255,100,100))
 
-        screen.blit(title, (GAME_WIDTH//2 - 180, HEIGHT//2 - 120))
-        screen.blit(start_text, (GAME_WIDTH//2 - 150, HEIGHT//2 - 40))
-        screen.blit(exit_text, (GAME_WIDTH//2 - 150, HEIGHT//2))
+        screen.blit(title, (GAME_WIDTH//2 - 180, HEIGHT//2 - 150))
+        screen.blit(start_text, (GAME_WIDTH//2 - 150, HEIGHT//2 - 90))
+        screen.blit(exit_text, (GAME_WIDTH//2 - 150, HEIGHT//2 - 50))
+
+        # Leaderboard Title
+        leaderboard_title = font.render("TOP 5 SCORES", True, (255,255,0))
+        screen.blit(leaderboard_title, (GAME_WIDTH//2 - 100, HEIGHT//2))
+
+        # Display Top Scores
+        for i, s in enumerate(top_scores):
+            score_text = font.render(f"{i+1}. {s}", True, (255,255,255))
+            screen.blit(score_text, (GAME_WIDTH//2 - 50, HEIGHT//2 + 40 + i*30))
 
         if fingers == 2:
             player, bullets, enemies, score, lives = reset_game()
@@ -155,7 +188,7 @@ while running:
     # =========================
     elif game_state == "PLAYING":
 
-        # Shoot (4+ fingers)
+        # Shoot
         if fingers >= 4 and shoot_cooldown <= 0:
             bullets.append(pygame.Rect(player.centerx-5, player.y, 10, 20))
             shoot_cooldown = 15
@@ -188,6 +221,7 @@ while running:
                 enemies.remove(enemy)
                 lives -= 1
                 if lives <= 0:
+                    top_scores = update_top_scores(score)
                     game_state = "MENU"
 
         enemies = [e for e in enemies if e.y < HEIGHT]
@@ -205,12 +239,11 @@ while running:
         if shoot_cooldown > 0:
             shoot_cooldown -= 1
 
-    # ===== DRAW CAMERA PANEL =====
+    # ===== DRAW CAMERA =====
     screen.blit(cam_surface, (GAME_WIDTH, 0))
 
     pygame.display.update()
 
-    # Close only if window closed
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
